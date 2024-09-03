@@ -138,7 +138,7 @@ void transform_vector() {
     Eigen::Vector3d v_a = [2.5, 3.0, -10.0];
     Eigen::Vector4d v_a_4d = [v_a, 1];
     Eigen::Vector3d translation = [0.0, 0.0, 10.0];
-    Eigen::Vector3d eulerZYX = [60 45 0];
+    Eigen::Vector3d eulerZYX = [60, 45, 0];
     Eigen::Matrix3d rotation = rotation_matrix_from_euler_zyx(eulerZYX);
     Eigen::Matrix4d t_a_w = transformation_matrix(rotation, translation);
 
