@@ -124,12 +124,30 @@ void rotation_matrix_test()
 
 Eigen::Matrix4d transformation_matrix(const Eigen::Matrix3d &r, const Eigen::Vector3d &p)
 {
-Eigen::Matrix4d matrix;
-// implement the necessary equations and functionality.
+    Eigen::Matrix4d matrix;
+    // implement the necessary equations and functionality.
+    matrix <<
+        r(0,0), r(0,1), r(0,2), p(0),
+        r(1,0), r(1,1), r(1,2), p(1),
+        r(2,0), r(2,1), r(2,2), p(2),
+        0, 0, 0, 1;
 return matrix;
 }
 
+void transform_vector() {
+    Eigen::Vector3d v_a = [2.5, 3.0, -10.0];
+    Eigen::Vector4d v_a_4d = [v_a, 1];
+    Eigen::Vector3d translation = [0.0, 0.0, 10.0];
+    Eigen::Vector3d eulerZYX = [60 45 0];
+    Eigen::Matrix3d rotation = rotation_matrix_from_euler_zyx(eulerZYX);
+    Eigen::Matrix4d t_a_w = transformation_matrix(rotation, translation);
 
+    Eigen::Vector4d v_w_4d = t_a_w * v_a_4d;
+    Eigen::Vector3d v_w = [v_w_4d(0), v_w_4d(1), v_w_4d(2)];
+
+    std::cout << "Vw" << std::endl;
+    std::cout << v_w << std::endl;
+}
 void example(double constant)
 {
     Eigen::Matrix3d identity;
