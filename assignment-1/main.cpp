@@ -134,16 +134,23 @@ Eigen::Matrix4d transformation_matrix(const Eigen::Matrix3d &r, const Eigen::Vec
 return matrix;
 }
 
+void transformation_matrix_test()
+{
+    Eigen::Matrix3d r = rotation_matrix_from_euler_zyx(Eigen::Vector3d{45, -45.0, 90.0});
+    Eigen::Vector3d v{1.0, -2.0, 3.0};
+    std::cout << "transformation_matrix: " << std::endl;
+    std::cout << transformation_matrix(r, v) << std::endl;
+}
+
 void transform_vector() {
-    Eigen::Vector3d v_a = [2.5, 3.0, -10.0];
-    Eigen::Vector4d v_a_4d = [v_a, 1];
-    Eigen::Vector3d translation = [0.0, 0.0, 10.0];
-    Eigen::Vector3d eulerZYX = [60, 45, 0];
+    Eigen::Vector4d v_a_4d = {2.5, 3.0, -10.0, 1.0};
+    Eigen::Vector3d translation = {0.0, 0.0, 10.0};
+    Eigen::Vector3d eulerZYX = {60.0, 45.0, 0.0};
     Eigen::Matrix3d rotation = rotation_matrix_from_euler_zyx(eulerZYX);
     Eigen::Matrix4d t_a_w = transformation_matrix(rotation, translation);
 
     Eigen::Vector4d v_w_4d = t_a_w * v_a_4d;
-    Eigen::Vector3d v_w = [v_w_4d(0), v_w_4d(1), v_w_4d(2)];
+    Eigen::Vector3d v_w = {v_w_4d(0), v_w_4d(1), v_w_4d(2)};
 
     std::cout << "Vw" << std::endl;
     std::cout << v_w << std::endl;
@@ -163,5 +170,7 @@ int main()
 {
     skew_symmetric_test();
     rotation_matrix_test();
+    transformation_matrix_test();
+    transform_vector();
     return 0;
 }
