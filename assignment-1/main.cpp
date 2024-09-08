@@ -23,9 +23,9 @@ void skew_symmetric_test()
 {
 Eigen::Matrix3d skew_matrix = skew_symmetric(Eigen::Vector3d{0.5, 0.5, 0.707107});
 std::cout << "Skew-symmetric matrix: " << std::endl;
-std::cout << skew_matrix << std::endl;
+std::cout << skew_matrix << std::endl << std::endl;
 std::cout << "Skew-symmetric matrix transposition: " << std::endl;
-std::cout << -skew_matrix.transpose() << std::endl;
+std::cout << -skew_matrix.transpose() << std::endl << std::endl;
 }
 
 Eigen::Matrix3d rotation_matrix_from_frame_axes(const Eigen::Vector3d &x,
@@ -139,7 +139,7 @@ void transformation_matrix_test()
     Eigen::Matrix3d r = rotation_matrix_from_euler_zyx(Eigen::Vector3d{45, -45.0, 90.0});
     Eigen::Vector3d v{1.0, -2.0, 3.0};
     std::cout << "transformation_matrix: " << std::endl;
-    std::cout << transformation_matrix(r, v) << std::endl;
+    std::cout << transformation_matrix(r, v) << std::endl << std::endl;
 }
 
 void transform_vector() {
