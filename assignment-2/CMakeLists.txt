@@ -1,6 +1,8 @@
 find_package(Eigen3 CONFIG REQUIRED)
 
-add_executable(test main.cpp
-        main.cpp)
+add_executable(assignment2 main.cpp
+        main.cpp
+        ../math/main.cpp
+        ../math/include/math/math.h)
 
-target_link_libraries(test PRIVATE Eigen3::Eigen)
+target_link_libraries(assignment2 PUBLIC math PRIVATE Eigen3::Eigen)

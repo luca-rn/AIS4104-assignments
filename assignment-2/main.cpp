@@ -1,85 +1,131 @@
 #include <iostream>
 
-#include <Eigen/Dense>
+#include "math/math.h"
 
-const double DEG_TO_RAD = 0.0174532925;
-const double RAD_TO_DEG = 57.2957795;
+void wrench_in_frames() {
+    Eigen::Vector3d f_w{-30, 0 , 0};
+    Eigen::Vector3d m_s{0, 0, 2};
+    Eigen::Vector3d e_ws{60, -60, 0};
 
-bool floatEquals(double a, double b){
-  return std::abs(a - b) < 1e-6;
+    Eigen::Matrix3d r_ws = math::rotate_y(e_ws(0)*math::DEG_TO_RAD)*math::rotate_z(e_ws(1)*math::DEG_TO_RAD)*math::rotate_x(e_ws(2)*math::DEG_TO_RAD);
+    Eigen::Vector3d f_s = r_ws.transpose()*f_w;
+    Eigen::Vector3d m_w = r_ws*m_s;
+
+    std::cout << "f_w: " << f_w.transpose() << std::endl;
+    std::cout << "m_w: " << m_w.transpose() << std::endl << std::endl;
+    std::cout << "f_s: " << f_s.transpose() << std::endl;
+    std::cout << "m_s: " << m_s.transpose() << std::endl << std::endl;
 }
 
-Eigen::Matrix3d rotate_x(double radians)
-{
-    Eigen::Matrix3d matrix;
-    // implement the necessary equations and functionality.
-    matrix <<
-        1.0, 0.0, 0.0,
-        0.0, std::cos(radians), -std::sin(radians),
-        0.0, std::sin(radians), std::cos(radians);
-    return matrix;
+void sum_of_wrenches_different_frames() {
+    double m_a = 0.1, g = 10.0, m_h = 0.5;
+    Eigen::VectorXd f_h(6);
+    f_h << 0, 0, 0, 0, -5, 0;
+    Eigen::VectorXd f_a(6);
+    f_a << 0, 0, 0, 0, 0, 1;
+
+    Eigen::Matrix4d t_hf;
+    t_hf << 1, 0, 0, -0.1,
+    0, 1, 0, 0,
+    0, 0, 1, 0,
+    0, 0, 0, 1;
+    Eigen::Matrix4d t_af;
+    t_af << 1, 0, 0, -0.25,
+    0, 0, 1, 0,
+    0, -1, 0, 0,
+    0, 0, 0, 1;
+
+    /*
+    std::cout << "AdjThf " << std::endl <<adjoint_matrix(t_hf).transpose() << std::endl;
+    std::cout << "first term: " << std::endl <<adjoint_matrix(t_hf.transpose())*f_h << std::endl;
+    */
+    Eigen::VectorXd f_f(6);
+    f_f = math::adjoint_matrix(t_hf).transpose()*f_h + math::adjoint_matrix(t_af).transpose()*f_a;
+
+    std::cout << "f_f: " << f_f.transpose() << std::endl;
 }
 
-Eigen::Matrix3d rotate_y(double radians)
-{
-    Eigen::Matrix3d matrix;
-    // implement the necessary equations and functionality.
-    matrix <<
-        std::cos(radians), 0.0, std::sin(radians),
-        0.0, 1.0, 0.0,
-        -std::sin(radians), 0.0, std::cos(radians);
+void print_pose(const std::string &label, const Eigen::Matrix4d &tf) {
+    Eigen::Matrix3d r = tf.block(0, 0, 3, 3);
+    Eigen::Vector3d p = tf.block(0, 3, 3, 1);
+    Eigen::Vector3d zyx = math::euler_zyx_from_rotation(r);
 
-    return matrix;
+    std::cout << label << std::endl;
+    std::cout << "Euler ZYX Angles: " << zyx.transpose()*math::RAD_TO_DEG << std::endl;
+    std::cout << "Linear Position: " << p.transpose() << std::endl << std::endl;
 }
 
-Eigen::Matrix3d rotate_z(double radians)
-{
-    Eigen::Matrix3d matrix;
-    // implement the necessary equations and functionality.
-    matrix <<
-        std::cos(radians), -std::sin(radians), 0.0,
-        std::sin(radians), std::cos(radians), 0.0,
-        0.0, 0.0, 1.0;
+void test_planar_3r_fk_transform() {
+    std::vector<double> j1{0.0, 0.0, 0.0};
+    std::string l1 = "j1 test_planar_3r_fk_transform";
+    std::vector<double> j2{90.0, 0.0, 0.0};
+    std::string l2 = "j2 test_planar_3r_fk_transform";
+    std::vector<double> j3{0.0, 90.0, 0.0};
+    std::string l3 = "j3 test_planar_3r_fk_transform";
+    std::vector<double> j4{0.0, 0.0, 90.0};
+    std::string l4 = "j4 test_planar_3r_fk_transform";
+    std::vector<double> j5{10.0, -15.0, 2.75};
+    std::string l5 = "j5 test_planar_3r_fk_transform";
 
-    return matrix;
+    print_pose(l1,math::planar_3r_fk_transform(j1));
+    print_pose(l2,math::planar_3r_fk_transform(j2));
+    print_pose(l3,math::planar_3r_fk_transform(j3));
+    print_pose(l4,math::planar_3r_fk_transform(j4));
+    print_pose(l5,math::planar_3r_fk_transform(j5));
 }
 
-Eigen::CommaInitializer<Eigen::Matrix<double, 3, 3>> operator^(const Eigen::CommaInitializer<Eigen::Matrix<double, 3, 3>>& lhs, double rhs);
+void test_planar_3r_fk_screw() {
+    std::vector<double> j1{0.0, 0.0, 0.0};
+    std::string l1 = "j1 test_planar_3r_fk_screw";
+    std::vector<double> j2{90.0, 0.0, 0.0};
+    std::string l2 = "j2 test_planar_3r_fk_screw";
+    std::vector<double> j3{0.0, 90.0, 0.0};
+    std::string l3 = "j3 test_planar_3r_fk_screw";
+    std::vector<double> j4{0.0, 0.0, 90.0};
+    std::string l4 = "j4 test_planar_3r_fk_screw";
+    std::vector<double> j5{10.0, -15.0, 2.75};
+    std::string l5 = "j5 test_planar_3r_fk_screw";
 
-Eigen::Matrix3d rotation_matrix_from_euler_zyx(const Eigen::Vector3d &e)
-{
-    Eigen::Matrix3d matrix = rotate_z(e(0))*rotate_y(e(1))*rotate_x(e(2));
-    return matrix;
+    print_pose(l1,math::planar_3r_fk_screw(j1));
+    print_pose(l2,math::planar_3r_fk_screw(j2));
+    print_pose(l3,math::planar_3r_fk_screw(j3));
+    print_pose(l4,math::planar_3r_fk_screw(j4));
+    print_pose(l5,math::planar_3r_fk_screw(j5));
 }
 
-Eigen::Vector3d euler_xyz_from_rotation(const Eigen::Matrix3d &r){
-  double a = 0.0;
-  double b = 0.0;
-  double c = 0.0;
-  if(floatEquals(r(2,0), -1.0)){
-    b = EIGEN_PI / 2.0;
-    a = 0.0;
-    c = std::atan2(r(0,1), r(1,1));
-  } else if(floatEquals(r(2,0), 1.0)){
-    b = -(EIGEN_PI / 2.0);
-    a = 0.0;
-    c = -std::atan2(r(0,1), r(1,1));
-  } else {
-    b = std::atan2(-r(2,0), std::sqrt(r(0,0)*r(0,0)+r(1,0)*r(1,0)));
-    a = std::atan2(r(1,0), r(0,0));
-    c = std::atan2(r(2,1), r(2,2));
-  }
-  return Eigen::Vector3d{a,b,c};
+void test_ur3e_fk_screw() {
+    std::vector<double> j1{0.0, 0.0, 0.0, -90.0, 0.0, 0.0};
+    std::string l1 = "j1 test_ur3e_fk_screw";
+    std::vector<double> j2{0.0, -180.0, 0.0, 0.0, 0.0, 0.0};
+    std::string l2 = "j2 test_ur3e_fk_screw";
+    std::vector<double> j3{0.0, -90.0, 0.0, 0.0, 0.0, 0.0};
+    std::string l3 = "j3 test_ur3e_fk_screw";
+
+    print_pose(l1,math::ur3e_fk_screw(j1));
+    print_pose(l2,math::ur3e_fk_screw(j2));
+    print_pose(l3,math::ur3e_fk_screw(j3));
+}
+
+void test_ur3e_fk_transform() {
+    std::vector<double> j1{0.0, 0.0, 0.0, -90.0, 0.0, 0.0};
+    std::string l1 = "j1 test_ur3e_fk_transform";
+    std::vector<double> j2{0.0, -180.0, 0.0, 0.0, 0.0, 0.0};
+    std::string l2 = "j2 test_ur3e_fk_transform";
+    std::vector<double> j3{0.0, -90.0, 0.0, 0.0, 0.0, 0.0};
+    std::string l3 = "j3 test_ur3e_fk_transform";
+
+    print_pose(l1,math::ur3e_fk_transform(j1));
+    print_pose(l2,math::ur3e_fk_transform(j2));
+    print_pose(l3,math::ur3e_fk_transform(j3));
 }
 
 int main()
 {
-    Eigen::Vector3d e = Eigen::Vector3d{60.0, 45.0, 30.0} * DEG_TO_RAD;
-    Eigen::Matrix3d r = rotation_matrix_from_euler_zyx(e);
-    Eigen::Vector3d ea = euler_xyz_from_rotation(r);
-
-    std::cout << e << std::endl;
-    std::cout << "ea sports" << std::endl;
-    std::cout << ea << std::endl;
+    wrench_in_frames();
+    sum_of_wrenches_different_frames();
+    test_planar_3r_fk_transform();
+    test_planar_3r_fk_screw();
+    test_ur3e_fk_screw();
+    test_ur3e_fk_transform();
     return 0;
 }
