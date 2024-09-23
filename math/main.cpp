@@ -9,6 +9,7 @@ bool math::floatEquals(double a, double b) {
     return std::abs(a - b) < 1e-6;
 }
 
+
 Eigen::Matrix3d math::skew_symmetric(Eigen::Vector3d v) {
     Eigen::Matrix3d matrix;
     matrix <<
@@ -104,6 +105,7 @@ Eigen::MatrixXd math::adjoint_matrix(const Eigen::Matrix4d &tf) {
     Eigen::MatrixXd adjoint(6, 6);
     adjoint << r, Eigen::Matrix3d::Zero(), skew_symmetric(p) * r, r;
     /*
+    Having fun
     Eigen::MatrixXd adjoint(6,6);
     adjoint << tf(0,0), tf(0,1), tf(0,2), 0, 0, 0,
     tf(1,0), tf(1,1), tf(1,2), 0, 0, 0,
@@ -221,6 +223,8 @@ Eigen::Matrix4d math::planar_3r_fk_screw(const std::vector<double> &joint_positi
     double l1 = 10.0, l2 = 10.0, l3 = 10.0;
     double theta1 = joint_positions.at(0), theta2 = joint_positions.at(1);
     double theta3 = joint_positions.at(2);
+
+    // Defining w and q and taking screw access to find cross product v
     Eigen::Vector3d w = {0.0, 0.0, 1.0};
     Eigen::Vector3d q1 = {0.0, 0.0, 0.0};
     Eigen::Vector3d q2 = {l1, 0.0, 0.0};
@@ -228,7 +232,6 @@ Eigen::Matrix4d math::planar_3r_fk_screw(const std::vector<double> &joint_positi
     Eigen::VectorXd s1 = screw_axis(w, q1, 0);
     Eigen::VectorXd s2 = screw_axis(w, q2, 0);
     Eigen::VectorXd s3 = screw_axis(w, q3, 0);
-
     Eigen::Vector3d v1 = {s1(3), s1(4), s1(5)};
     Eigen::Vector3d v2 = {s2(3), s2(4), s2(5)};
     Eigen::Vector3d v3 = {s3(3), s3(4), s3(5)};
@@ -250,6 +253,7 @@ Eigen::Matrix4d math::ur3e_fk_screw(const std::vector<double> &joint_positions) 
     double l1 = 0.24355, l2 = 0.2132;
     double w1 = 0.13105, w2 = 0.0921;
 
+    // Defining w and v values from Example 4.5
     Eigen::Vector3d w_1 = {0.0, 0.0, 1.0};
     Eigen::Vector3d w_2 = {0.0, 1.0, 0.0};
     Eigen::Vector3d w_3 = {0.0, 1.0, 0.0};
@@ -303,11 +307,13 @@ Eigen::Matrix4d math::ur3e_fk_transform(const std::vector<double> &joint_positio
     double theta3 = joint_positions.at(2) * DEG_TO_RAD, theta4 = joint_positions.at(3) * DEG_TO_RAD;
     double theta5 = joint_positions.at(4) * DEG_TO_RAD, theta6 = joint_positions.at(5) * DEG_TO_RAD;
 
+    // Creating rotation matrix to represent rotational orientation of end-effector in s frame/6th joint frame
     Eigen::Matrix3d r_sb;
     r_sb <<
             -1.0, 0.0, 0.0,
             0.0, 0.0, 1.0,
             0.0, 1.0, 0.0;
+
 
     Eigen::Matrix4d t01 = transformation_matrix(rotate_z(theta1), {0.0, 0.0, 0.0});
     Eigen::Matrix4d t12 = transformation_matrix(rotate_y(theta2), {0.0, 0.0, h1});
