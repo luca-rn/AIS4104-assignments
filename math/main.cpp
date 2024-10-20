@@ -469,7 +469,6 @@ std::pair<uint32_t, double> math::gradient_descent_root_find(const std::function
         } else if (i == i_boundary_3) {
             gamma = gamma_b3;
         }
-        //    gamma = std::abs((x_new-x_old)*(f(x_new)-f(x_old))/(std::abs(f(x_new)-f(x_old))*std::abs(f(x_new)-f(x_old))));
         if (i > max_i) {
             std::cout << "root finding failed, max iterations exceeded" << std::endl;
             break;
