@@ -2,13 +2,14 @@
 // Created by Admin on 5/09/2024.
 //
 #include <iostream>
+#include <numeric>
+#include <functional>
 // #include <Eigen/Dense>
 #include "include/math/math.h"
 
 bool math::floatEquals(double a, double b) {
     return std::abs(a - b) < 1e-6;
 }
-
 
 Eigen::Matrix3d math::skew_symmetric(Eigen::Vector3d v) {
     Eigen::Matrix3d matrix;
@@ -17,6 +18,10 @@ Eigen::Matrix3d math::skew_symmetric(Eigen::Vector3d v) {
             v.z(), 0.0, -v.x(),
             -v.y(), v.x(), 0.0;
     return matrix;
+}
+
+Eigen::Matrix3d math::rotation(const Eigen::Matrix4d &tf) {
+    return tf.block<3, 3>(0, 0);
 }
 
 Eigen::Matrix4d math::transformation_matrix(const Eigen::Matrix3d &r, const Eigen::Vector3d &p) {
@@ -171,7 +176,7 @@ std::pair<Eigen::VectorXd, double> math::matrix_logarithm(const Eigen::Matrix4d 
     double theta = 0.0;
     Eigen::VectorXd s(6);
     Eigen::Vector3d w = Eigen::Vector3d::Zero();
-    Eigen::Vector3d v = Eigen::Vector3d::Zero();
+    Eigen::Vector3d v;
     Eigen::Matrix3d r = t.block(0, 0, 3, 3);
     Eigen::Vector3d p = t.block(0, 3, 3, 1);
     if (!r.isIdentity()) {
@@ -334,4 +339,222 @@ Eigen::Matrix4d math::ur3e_fk_transform(const std::vector<double> &joint_positio
     Eigen::Matrix4d t06 = t01*t12*t23*t34*t45*t56;
     */
     return t07;
+}
+
+Eigen::VectorXd math::std_vector_to_eigen(std::vector<double> &v) {
+    Eigen::VectorXd r(v.size());
+    for (int i = 0; i < v.size(); i++) {
+        r(i) = v[i];
+    }
+    return r;
+}
+
+Eigen::Matrix4d math::matrix_exponential(Eigen::VectorXd &screw, double theta) {
+    return matrix_exponential(screw.head<3>(), screw.tail<3>(), theta);
+}
+
+bool math::is_average_below_eps(const std::vector<double> &values, double eps = 10e-7, const uint8_t n_values = 5u) {
+    if (values.size() < n_values) {
+        return false;
+    }
+    double sum = std::accumulate(values.end() - n_values, values.end(), 0.0);
+    return std::abs(sum / n_values) < eps;
+}
+
+std::pair<Eigen::Matrix4d, std::vector<Eigen::VectorXd> > math::ur3e_space_chain() {
+    double h1 = 0.15185, h2 = 0.08535;
+    double l1 = 0.24355, l2 = 0.2132;
+    double w1 = 0.13105, w2 = 0.0921;
+
+    Eigen::Matrix3d mr = math::rotate_y(-90.0 * math::DEG_TO_RAD)
+                         * math::rotate_x(-90.0 * math::DEG_TO_RAD)
+                         * math::rotate_z(-90.0 * math::DEG_TO_RAD);
+    Eigen::Matrix4d m = math::transformation_matrix(mr, Eigen::Vector3d{l1 + l2, w1 + w2, h1 - h2});
+
+    std::vector<Eigen::VectorXd> screws{
+        math::screw_axis({0.0, 0.0, 0.0}, {0.0, 0.0, 1.0}, 0.0),
+        math::screw_axis({0.0, 0.0, h1}, {0.0, 1.0, 0.0}, 0.0),
+        math::screw_axis({l1, 0.0, h1}, {0.0, 1.0, 0.0}, 0.0),
+        math::screw_axis({l1 + l2, 0.0, h1}, {0.0, 1.0, 0.0}, 0.0),
+        math::screw_axis({l1 + l2, w1, 0.0}, {0.0, 0.0, -1.0}, 0.0),
+        math::screw_axis({l1 + l2, 0.0, h1 - h2}, {0.0, 1.0, 0.0}, 0.0)
+    };
+
+    return std::make_pair(m, screws);
+}
+
+Eigen::Matrix4d math::ur3e_space_fk(const Eigen::VectorXd &joint_positions) {
+    auto [m, space_screws] = ur3e_space_chain();
+    Eigen::Matrix4d t06 = Eigen::Matrix4d::Identity();
+    for (int i = 0; i < joint_positions.size(); i++) {
+        t06 *= matrix_exponential(space_screws[i], joint_positions[i]);
+    }
+    return t06 * m;
+}
+
+
+std::pair<Eigen::Matrix4d, std::vector<Eigen::VectorXd> > math::ur3e_body_chain() {
+    auto [m, space_screws] = ur3e_space_chain();
+
+    Eigen::Matrix4d m_inv = m.inverse();
+
+    std::vector<Eigen::VectorXd> body_screws;
+    for (const auto &screw: space_screws) {
+        body_screws.emplace_back(math::adjoint_matrix(m_inv) * screw);
+    }
+
+    return std::make_pair(m, body_screws);
+}
+
+Eigen::Matrix4d math::ur3e_body_fk(const Eigen::VectorXd &joint_positions) {
+    auto [m, body_screws] = ur3e_body_chain();
+    Eigen::Matrix4d t06 = Eigen::Matrix4d::Identity() * m;
+    for (int i = 0; i < joint_positions.size(); i++) {
+        t06 *= math::matrix_exponential(body_screws[i], joint_positions[i]);
+    }
+
+    return t06;
+}
+
+std::pair<uint32_t, double> math::newton_raphson_root_find(const std::function<double(double)> &f, double x_0,
+                                                           double dx_0, double eps) {
+    // initial guess x_0
+    // final f(x) ~= 0
+    double x = x_0;
+    uint32_t i = 0;
+    int const max_i = 1000; // stopping infinite loops
+
+    while (abs(f(x)) >= eps) {
+        // std::cout << x << std::endl;
+        x -= f(x) / ((f(x + dx_0) - f(x)) / dx_0);
+        i++;
+        if (i > max_i) {
+            std::cout << "root finding failed, max iterations exceeded" << std::endl;
+            break;
+        }
+    }
+    return std::make_pair(i, x);
+}
+
+std::pair<uint32_t, double> math::gradient_descent_root_find(const std::function<double(double)> &f, double x_0,
+                                                             double gamma, double dx_0, double eps) {
+    double x_new = x_0 - gamma * (abs(f(x_0 + dx_0)) - abs(f(x_0))) / dx_0, x_old = x_0;
+
+    uint32_t i = 0;
+
+    // the function had a tendency to bound over the root when there is a steep gradient on either size,
+    // so changing gamma after a certain number of iterations helps to find the solution
+    // higher gamma initially makes sure the algorithm converges to the solution quicker
+    int const i_boundary_1 = 5000;
+    double const gamma_b1 = 0.01;
+    int const i_boundary_2 = 10000;
+    double const gamma_b2 = 0.005;
+    int const i_boundary_3 = 15000;
+    double const gamma_b3 = 0.001;
+    int const max_i = 20000; // stopping infinite loops
+
+    while (abs(f(x_old)) >= eps) {
+        // std::cout << x_old << " "  << std::endl;
+        double grad = (abs(f(x_new)) - abs(f(x_old))) / (x_new-x_old);
+
+
+        x_old = x_new;
+        x_new -= gamma * grad;
+        // std::cout << "gradient: " << grad << std::endl << i << std::endl;
+        i++;
+        if (i == i_boundary_1) {
+            gamma = gamma_b1;
+        } else if (i == i_boundary_2) {
+            gamma = gamma_b2;
+        } else if (i == i_boundary_3) {
+            gamma = gamma_b3;
+        }
+        //    gamma = std::abs((x_new-x_old)*(f(x_new)-f(x_old))/(std::abs(f(x_new)-f(x_old))*std::abs(f(x_new)-f(x_old))));
+        if (i > max_i) {
+            std::cout << "root finding failed, max iterations exceeded" << std::endl;
+            break;
+        }
+    }
+    return std::make_pair(i, x_old);
+}
+
+// how to account for finding root instead of minima -> use of abs() in gradient or other technique
+// if using abs() then how to account for steep gradient causing oscillation of x
+
+Eigen::MatrixXd math::ur3e_space_jacobian(const Eigen::VectorXd &current_joint_positions){
+    auto [m, space_screws] = ur3e_space_chain();
+    uint32_t len = space_screws.size();
+    uint32_t screwLen = 6;
+    Eigen::MatrixXd J = Eigen::MatrixXd::Zero(len, screwLen);
+    // std::cout << "debug 1" << std::endl;
+    J.block(0, 0, screwLen, 1) = space_screws[0];
+    // std::cout << "debug 1.1" << std::endl;
+    for (int i = 1; i <= len-1; i++) {
+        // std::cout << "debug 1.2" << std::endl;
+        Eigen::Matrix4d e_coli = Eigen::Matrix4d::Identity();
+        for (int k = 0; k < i; k++) {
+            e_coli *= matrix_exponential(space_screws[k], current_joint_positions[k]);
+        }
+        J.block(0, i, screwLen, 1) = adjoint_matrix(e_coli)*space_screws[i];
+    }
+    // std::cout << "debug 2" << std::endl;
+    return J;
+}
+
+Eigen::MatrixXd math::ur3e_body_jacobian(const Eigen::VectorXd &current_joint_positions) {
+    auto [m, body_screws] = ur3e_body_chain();
+    uint32_t len = body_screws.size();
+    uint32_t screwLen = 6;
+    Eigen::MatrixXd J = Eigen::MatrixXd::Zero(len, screwLen);
+    // std::cout << "debug 3 " << len << std::endl;
+    J.block(0, screwLen-1, screwLen, 1) = body_screws[len-1];
+    // std::cout << "debug 3.1 "<< std::endl;
+
+    for (int i = 0; i < len-1; i++) {
+        // std::cout << "debug 3.2" << std::endl;
+        Eigen::Matrix4d e_col_i = Eigen::Matrix4d::Identity();
+        for (uint32_t k = len-1; k > i; k--) {
+            Eigen::VectorXd b_s = -body_screws[k];
+            e_col_i *= matrix_exponential(b_s, current_joint_positions[k]);
+        }
+        J.block(0, i, screwLen, 1) = adjoint_matrix(e_col_i)*body_screws[i];
+    }
+    // std::cout << "debug 4" << std::endl;
+
+    Eigen::Matrix4d e_ito1 = Eigen::Matrix4d::Identity();
+    for (int i = static_cast<int>(len)-1; i > 0; i--) {
+        Eigen::VectorXd b_s = -body_screws[i];
+        e_ito1 *= matrix_exponential(b_s, current_joint_positions[i]);
+        J.block(0, i-1, screwLen, 1) = adjoint_matrix(e_ito1)*body_screws[i-1];
+    }
+    return J;
+}
+
+std::pair<size_t, Eigen::VectorXd> math::ur3e_ik_body(const Eigen::Matrix4d &t_sd, const Eigen::VectorXd &current_joint_positions, double gamma, double v_e, double w_e) {
+    // tested a few different values, gamma 1e-2 worked best, max iterations 10000 because my laptop is slow
+    int i = 0, i_max = 10000;
+    Eigen::VectorXd joint_positions = current_joint_positions;
+    Eigen::VectorXd twist_b(6); // {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+    double theta;
+    Eigen::Matrix4d t_sb = ur3e_space_fk(joint_positions);
+    Eigen::Matrix4d t_err = t_sb.inverse()*t_sd;
+    std::tie(twist_b,theta) = matrix_logarithm(t_err);
+    twist_b *= theta;
+    Eigen::MatrixXd j_b;
+    while (twist_b.head(3).norm() > v_e || twist_b.tail(3).norm() < w_e) {
+        j_b = ur3e_body_jacobian(joint_positions);
+        joint_positions += gamma*j_b.completeOrthogonalDecomposition().pseudoInverse()*twist_b;
+
+        t_sb = ur3e_space_fk(joint_positions);
+        t_err = t_sb.inverse()*t_sd;
+        std::tie(twist_b,theta) = matrix_logarithm(t_err);
+        twist_b *= theta;
+        i++;
+
+        if (i >= i_max) {
+            std::cout << "max iterations exceeded" << std::endl;
+            break;
+        }
+    }
+    return std::make_pair(i, joint_positions);
 }
